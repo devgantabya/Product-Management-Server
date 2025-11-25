@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const app = express();
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT || 5000;
 
 app.use(cors());
@@ -30,14 +30,65 @@ async function run() {
 
         const productsDB = client.db('productsDB')
         const productsCollection = productsDB.collection('products');
+        const contactCollection = productsDB.collection('contacts');
 
-        app.get("/products", (req, res) => {
-
+        app.get("/products", async (req, res) => {
+            const cursor = productsCollection.find()
+            const result = await cursor.toArray();
+            res.send(result);
         })
+
+        app.get("/products/:id", async (req, res) => {
+            try {
+                const id = req.params.id;
+
+                if (!ObjectId.isValid(id)) {
+                    return res.status(400).json({ error: "Invalid product ID" });
+                }
+
+                const query = { _id: new ObjectId(id) };
+                const product = await productsCollection.findOne(query);
+
+                if (!product) {
+                    return res.status(404).json({ error: "Product not found" });
+                }
+
+                res.json(product);
+            } catch (err) {
+                res.status(500).json({ error: "Server error", details: err.message });
+            }
+        });
 
         app.post("/users", (req, res) => {
 
-        })
+        });
+
+
+        app.post("/contact", async (req, res) => {
+            try {
+                const { name, email, message } = req.body;
+
+                if (!name || !email || !message) {
+                    return res.status(400).json({ error: "All fields are required" });
+                }
+
+                const newMessage = {
+                    name,
+                    email,
+                    message,
+                    created_at: new Date(),
+                };
+
+                const result = await contactCollection.insertOne(newMessage);
+
+                res.status(201).json({ message: "Contact message saved", id: result.insertedId });
+            } catch (err) {
+                console.error(err);
+                res.status(500).json({ error: "Server error", details: err.message });
+            }
+        });
+
+
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
