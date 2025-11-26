@@ -3,10 +3,42 @@ const cors = require('cors');
 require('dotenv').config();
 const app = express();
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+var admin = require("firebase-admin");
 const port = process.env.PORT || 5000;
+
+
+var serviceAccount = require("./itemflow-firebase-admin-key.json");
+
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+});
+
 
 app.use(cors());
 app.use(express.json());
+
+const logger = (req, res, next) => {
+    next();
+}
+
+const verifyFirebaseToken = async (req, res, next) => {
+    if (!req.headers.authorization) {
+        return res.status(401).send({ message: "Unauthorized access" })
+    }
+
+    const token = req.headers.authorization.split(" ")[1];
+    if (!token) {
+        return res.status(401).send({ message: "Unauthorized access" })
+    }
+
+    try {
+        await admin.auth().verifyIdToken(token);
+        next();
+    }
+    catch {
+        return res.status(401).send({ message: "Unauthorized access" })
+    }
+}
 
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.7smyhy0.mongodb.net/?appName=Cluster0`;
@@ -26,7 +58,7 @@ app.get("/", (req, res) => {
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
-        await client.connect();
+        // await client.connect();
 
         const productsDB = client.db('productsDB')
         const usersCollection = productsDB.collection("users");
@@ -98,7 +130,8 @@ async function run() {
             }
         });
 
-        app.get("/my-products", async (req, res) => {
+        app.get("/my-products", logger, verifyFirebaseToken, async (req, res) => {
+            console.log(req.headers);
             const { email } = req.query;
             if (!email) return res.status(400).json({ error: "Email required" });
 
@@ -108,14 +141,45 @@ async function run() {
 
 
         app.patch("/my-products/:id", async (req, res) => {
-            const { id } = req.params;
-            if (!ObjectId.isValid(id)) return res.status(400).json({ error: "Invalid ID" });
+            try {
+                const { id } = req.params;
 
-            const updateData = req.body;
-            if (updateData.price) updateData.price = Number(updateData.price);
+                if (!ObjectId.isValid(id))
+                    return res.status(400).json({ error: "Invalid ID" });
 
-            const result = await productsCollection.updateOne({ _id: new ObjectId(id) }, { $set: updateData }); res.json(result);
+                const updateData = req.body;
+
+                if (updateData.price) updateData.price = Number(updateData.price);
+
+                const result = await productsCollection.updateOne(
+                    { _id: new ObjectId(id) },
+                    { $set: updateData }
+                );
+
+                if (result.matchedCount === 0) {
+                    return res.status(404).json({ error: "Product not found" });
+                }
+
+                if (result.modifiedCount === 0) {
+                    return res.json({
+                        success: false,
+                        modifiedCount: 0,
+                        message: "Nothing updated"
+                    });
+                }
+
+                res.json({
+                    success: true,
+                    modifiedCount: result.modifiedCount
+                });
+
+            } catch (err) {
+                console.error("Update error:", err);
+                res.status(500).json({ error: "Server error" });
+            }
         });
+
+
 
 
         app.delete("/my-products/:id", async (req, res) => {
@@ -154,7 +218,7 @@ async function run() {
 
 
         // Send a ping to confirm a successful connection
-        await client.db("admin").command({ ping: 1 });
+        // await client.db("admin").command({ ping: 1 });
 
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
