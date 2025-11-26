@@ -7,8 +7,7 @@ const port = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-//product-management-db
-//SnoGvW3dds6UTGT7
+
 const uri = "mongodb+srv://product-management-db:SnoGvW3dds6UTGT7@cluster0.7smyhy0.mongodb.net/?appName=Cluster0";
 
 const client = new MongoClient(uri, {
@@ -29,8 +28,24 @@ async function run() {
         await client.connect();
 
         const productsDB = client.db('productsDB')
+        const usersCollection = productsDB.collection("users");
         const productsCollection = productsDB.collection('products');
         const contactCollection = productsDB.collection('contacts');
+
+        app.post('/users', async (req, res) => {
+            const newUser = req.body;
+            const email = req.body.email;
+            const query = { email: email }
+            const existingUser = await usersCollection.findOne(query);
+
+            if (existingUser) {
+                res.send({ message: 'user already exits. do not need to insert again' })
+            }
+            else {
+                const result = await usersCollection.insertOne(newUser);
+                res.send(result);
+            }
+        })
 
         app.get("/products", async (req, res) => {
             const cursor = productsCollection.find()
@@ -59,8 +74,55 @@ async function run() {
             }
         });
 
-        app.post("/users", (req, res) => {
+        app.post("/products", async (req, res) => {
+            const newProduct = req.body;
+            newProduct.price = Number(newProduct.price);
+            newProduct.created_at = new Date();
 
+            try {
+                const productResult = await productsCollection.insertOne(newProduct);
+
+                res.status(201).send({
+                    success: true,
+                    message: "Product added successfully!",
+                    productResult,
+                });
+
+            } catch (error) {
+                console.error(error);
+                res.status(500).send({
+                    success: false,
+                    message: "Failed to add product.",
+                });
+            }
+        });
+
+        app.get("/my-products", async (req, res) => {
+            const { email } = req.query;
+            if (!email) return res.status(400).json({ error: "Email required" });
+
+            const myProducts = await productsCollection.find({ email }).toArray();
+            res.json(myProducts);
+        });
+
+
+        app.patch("/my-products/:id", async (req, res) => {
+            const { id } = req.params;
+            if (!ObjectId.isValid(id)) return res.status(400).json({ error: "Invalid ID" });
+
+            const updateData = req.body;
+            if (updateData.price) updateData.price = Number(updateData.price);
+
+            const result = await productsCollection.updateOne({ _id: new ObjectId(id) }, { $set: updateData }); res.json(result);
+        });
+
+
+        app.delete("/my-products/:id", async (req, res) => {
+            const { id } = req.params;
+            if (!ObjectId.isValid(id)) return res.status(400).json({ error: "Invalid ID" });
+
+            const result = await productsCollection.deleteOne({ _id: new ObjectId(id) });
+            res.json(result);
         });
 
 
