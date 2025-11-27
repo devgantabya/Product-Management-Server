@@ -1,3 +1,4 @@
 node_modules
 .env
 itemflow-firebase-admin-key.json
+.vercel

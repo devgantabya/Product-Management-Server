@@ -3,11 +3,12 @@ const cors = require('cors');
 require('dotenv').config();
 const app = express();
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-var admin = require("firebase-admin");
+const admin = require("firebase-admin");
 const port = process.env.PORT || 5000;
 
 
-var serviceAccount = require("./itemflow-firebase-admin-key.json");
+const decoded = Buffer.from(process.env.FIREBASE_SERVICE_KEY, "base64").toString("utf8");
+const serviceAccount = JSON.parse(decoded);
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
@@ -52,8 +53,9 @@ const client = new MongoClient(uri, {
 });
 
 app.get("/", (req, res) => {
-    res.send("product management server is available");
+    res.send("products management server is available");
 })
+
 
 async function run() {
     try {
@@ -220,7 +222,7 @@ async function run() {
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
 
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
+        // console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
         // Ensures that the client will close when you finish/error
         // await client.close();
@@ -228,6 +230,6 @@ async function run() {
 }
 run().catch(console.dir);
 
-app.listen(port, () => {
-    console.log(`product management server started on port: ${port}`);
-})
+// app.listen(port, () => {
+//     console.log(`product management server started on port: ${port}`);
+// })
